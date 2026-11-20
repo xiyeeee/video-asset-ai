@@ -1,0 +1,106 @@
+{
+  "framesManifest": "../frames/frames.json",
+  "frames": [
+    {
+      "sourceFrame": "frame-000001.jpg",
+      "timestampMs": 0,
+      "debugImage": "frame-000001/detections.jpg"
+    },
+    {
+      "sourceFrame": "frame-000002.jpg",
+      "timestampMs": 1001,
+      "debugImage": "frame-000002/detections.jpg"
+    },
+    {
+      "sourceFrame": "frame-000003.jpg",
+      "timestampMs": 2002,
+      "debugImage": "frame-000003/detections.jpg"
+    }
+  ],
+  "characters": [
+    {
+      "box": [
+        343,
+        100,
+        540,
+        536
+      ],
+      "score": 0.8163583874702454,
+      "sourceFrame": "frame-000001.jpg",
+      "timestampMs": 0,
+      "debugImage": "frame-000001/detections.jpg",
+      "characterId": 1,
+      "pngPath": "frame-000001/person-001.png"
+    },
+    {
+      "box": [
+        506,
+        42,
+        940,
+        536
+      ],
+      "score": 0.8378385305404663,
+      "sourceFrame": "frame-000001.jpg",
+      "timestampMs": 0,
+      "debugImage": "frame-000001/detections.jpg",
+      "characterId": 2,
+      "pngPath": "frame-000001/person-002.png"
+    },
+    {
+      "box": [
+        341,
+        62,
+        534,
+        536
+      ],
+      "score": 0.814842164516449,
+      "sourceFrame": "frame-000002.jpg",
+      "timestampMs": 1001,
+      "debugImage": "frame-000002/detections.jpg",
+      "characterId": 1,
+      "pngPath": "frame-000002/person-001.png"
+    },
+    {
+      "box": [
+        504,
+        18,
+        893,
+        536
+      ],
+      "score": 0.8558822274208069,
+      "sourceFrame": "frame-000002.jpg",
+      "timestampMs": 1001,
+      "debugImage": "frame-000002/detections.jpg",
+      "characterId": 2,
+      "pngPath": "frame-000002/person-002.png"
+    },
+    {
+      "box": [
+        332,
+        57,
+        537,
+        536
+      ],
+      "score": 0.8400706052780151,
+      "sourceFrame": "frame-000003.jpg",
+      "timestampMs": 2002,
+      "debugImage": "frame-000003/detections.jpg",
+      "characterId": 1,
+      "pngPath": "frame-000003/person-001.png"
+    },
+    {
+      "box": [
+        504,
+        9,
+        947,
+        535
+      ],
+      "score": 0.8422123193740845,
+      "sourceFrame": "frame-000003.jpg",
+      "timestampMs": 2002,
+      "debugImage": "frame-000003/detections.jpg",
+      "characterId": 2,
+      "pngPath": "frame-000003/person-002.png"
+    }
+  ]
+}

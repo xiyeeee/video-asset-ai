@@ -84,16 +84,16 @@ uv run --extra characters uvicorn app.main:app --host 127.0.0.1 --port 8000 --wo
 }
 ```
 
-成功示例。下列 `manifestRef` 中的后缀由 Python 生成，Java 应使用响应原值。
+HTTP 验收任务 `hero-delivery-001` 的实际成功响应。Java 读取自己那次任务返回的 `manifestRef` 原值。
 
 ```json
 {
-  "taskId": "task-001",
+  "taskId": "hero-delivery-001",
   "status": "SUCCEEDED",
   "stage": "WRITING_RESULTS",
   "progress": {"frameCount": 3, "detectedCharacterCount": 6},
   "result": {
-    "manifestRef": "task-001-6b55cec665b6411ea2b33ae917014cb6/characters/characters.json",
+    "manifestRef": "hero-delivery-001-8de49f309f1c4a1ba08affe18ddac43d/characters/characters.json",
     "characterAssetCount": 6
   },
   "error": null
@@ -129,36 +129,21 @@ uv run --extra characters uvicorn app.main:app --host 127.0.0.1 --port 8000 --wo
 
 ## 从共享目录读取结果
 
-1. 对 `SUCCEEDED` 响应，将 `result.manifestRef` 相对于共享输出根目录解析为 `characters.json`。在 Java 侧先验证引用为相对路径，再用 `Path.toRealPath()` 验证文件仍在共享根内。
-2. `frames` 列出所有处理过的抽帧截图。平铺的 `characters` 数组通过 `sourceFrame` 关联同一截图，可按该字段归帧。帧内 `characterId` 从 1 开始，`(sourceFrame, characterId)` 在同一份结果中标识一个人物素材。
-3. 将 `pngPath`、`debugImage` 相对于 `characters.json` 的父目录解析。将 `framesManifest` 相对于同目录解析，可得到本次抽帧的 `frames.json`。其中的 `sourceFrame` 或 `frames[].path` 相对于 `frames.json` 的父目录。清单内嵌引用再用 `toRealPath()` 验证仍在本次执行目录内。清单内的 `../frames/frames.json` 是有效的同任务内部引用。
-4. `timestampMs` 是实际选中帧相对提交视频播放起点的时间，按四舍五入写为整数毫秒，可映射为 Java `long`。原始抽帧清单保留小数精度。按 `sourceFrame` 关联同一帧，可兼容极高帧率下整数毫秒相同的不同帧。`box` 为原图像素坐标 `[left, top, right, bottom]`，右下边界不包含在框内。`score` 为检测分数。
+任务返回 `SUCCEEDED` 后，按下表解析文件。Java 侧先验证引用为相对路径，再用 `Path.toRealPath()` 按路径段校验结果仍在对应的共享根目录或任务目录内。
 
-清单结构示例：
+| 文件引用 | 解析基准 | 示例 |
+| --- | --- | --- |
+| 响应的 `result.manifestRef` | 共享输出根目录 | `hero-delivery-001-8de49f309f1c4a1ba08affe18ddac43d/characters/characters.json` |
+| 清单的 `framesManifest` | `characters.json` 的父目录 | `../frames/frames.json`，解析后仍在同一任务目录内 |
+| 清单的 `sourceFrame` 或抽帧清单的 `frames[].path` | `frames.json` 的父目录 | `frame-000002.jpg` |
+| 清单的 `debugImage` | `characters.json` 的父目录 | `frame-000002/detections.jpg` |
+| 清单的 `pngPath` | `characters.json` 的父目录 | `frame-000002/person-001.png` |
 
-```json
-{
-  "framesManifest": "../frames/frames.json",
-  "frames": [
-    {
-      "sourceFrame": "frame-000001.jpg",
-      "timestampMs": 1001,
-      "debugImage": "frame-000001/detections.jpg"
-    }
-  ],
-  "characters": [
-    {
-      "sourceFrame": "frame-000001.jpg",
-      "timestampMs": 1001,
-      "debugImage": "frame-000001/detections.jpg",
-      "characterId": 1,
-      "box": [80, 12, 410, 536],
-      "score": 0.81,
-      "pngPath": "frame-000001/person-001.png"
-    }
-  ]
-}
-```
+`frames` 列出处理过的截图，包括无人帧。`characters` 可按 `sourceFrame` 归帧。同一份结果中，`(sourceFrame, characterId)` 唯一标识一个人物素材，`characterId` 每帧从 1 开始。
+
+`timestampMs` 是实际选中帧相对提交视频播放起点的时间，按四舍五入写为整数毫秒，可映射为 Java `long`。原始抽帧清单保留小数精度。极高帧率下不同帧可能落在同一整数毫秒，仍可通过 `sourceFrame` 区分。`box` 为原图像素坐标 `[left, top, right, bottom]`，右下边界不包含在框内。`score` 为检测分数。
+
+[实际生成的 characters.json](examples/character-extraction/characters.json) 是上述 HTTP 任务原样生成的完整清单，包含 3 帧和 6 条素材，可直接供 Java 核对反序列化。清单引用的截图、调试图和 PNG 由下方验收命令在共享输出目录生成。
 
 ## 进程重启与落盘结果
 
@@ -187,4 +172,4 @@ ffmpeg -nostdin -n -ss 126.4 -i samples/blender-hero.webm -t 2.25 \
   samples/uploads/hero-character-http.mp4
 ```
 
-将提交参数中的 `sourceVideoRef` 改为 `uploads/hero-character-http.mp4`，间隔设为 1 秒。Apple M5 CPU 实测返回 3 帧、6 个透明 PNG，帧时间为 0、1001、2002 毫秒。另用合成灰色视频验证了成功空清单，用空 MP4 验证了失败状态。业务漫剧样片和 Spring Boot 调用端尚未参与联调。
+将提交参数中的 `sourceVideoRef` 改为 `uploads/hero-character-http.mp4`，间隔设为 1 秒。Apple M5 CPU 实测返回 3 帧、6 个透明 PNG，帧时间为 0、1001、2002 毫秒。另用合成灰色视频和真实检测模型验证了成功空清单，用空 MP4 验证了失败状态。HTTP 并发重复提交只发布了一份结果。自动测试通过替身控制排队、失败和发布时机。业务漫剧样片和 Spring Boot 调用端尚未参与联调。
