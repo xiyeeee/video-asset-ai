@@ -16,6 +16,7 @@ from app.pipeline.character_task_models import (
 class AssetKind(StrEnum):
     CHARACTERS = "CHARACTERS"
     AUDIO = "AUDIO"
+    SHOTS = "SHOTS"
 
 
 class AssetTaskRequest(TaskRequest):
@@ -39,11 +40,22 @@ class AudioResult(BaseModel, frozen=True):
     audio_ref: str = Field(serialization_alias="audioRef")
 
 
+class ShotStage(StrEnum):
+    DETECTING_SHOTS = "DETECTING_SHOTS"
+    EXTRACTING_PREVIEWS = "EXTRACTING_PREVIEWS"
+    WRITING_RESULTS = "WRITING_RESULTS"
+
+
+class ShotResult(BaseModel, frozen=True):
+    manifest_ref: str = Field(serialization_alias="manifestRef")
+    shot_count: int = Field(serialization_alias="shotCount")
+
+
 class BranchState(BaseModel, frozen=True):
     status: TaskStatus = TaskStatus.QUEUED
-    stage: TaskStage | AudioStage | None = None
+    stage: TaskStage | AudioStage | ShotStage | None = None
     progress: TaskProgress | None = None
-    result: TaskResult | AudioResult | None = None
+    result: TaskResult | AudioResult | ShotResult | None = None
     error: TaskError | None = None
 
 

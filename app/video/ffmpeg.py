@@ -126,6 +126,16 @@ def frame_timestamps(stderr: str) -> list[float]:
     return timestamps
 
 
+def validate_jpeg(image: Path) -> None:
+    if not image.is_file() or image.stat().st_size < 4:
+        raise VideoError(f"截图文件无效 {image.name}")
+    with image.open("rb") as file:
+        header = file.read(2)
+        file.seek(-2, 2)
+        if header != b"\xff\xd8" or file.read(2) != b"\xff\xd9":
+            raise VideoError(f"JPEG 截图不完整 {image.name}")
+
+
 def validate_frames(directory: Path, timestamps: list[float]) -> list[Frame]:
     images = sorted(directory.glob("frame-*.jpg"))
     if not timestamps or len(images) != len(timestamps):
@@ -140,13 +150,9 @@ def validate_frames(directory: Path, timestamps: list[float]) -> list[Frame]:
     ):
         if timestamp < 0 or timestamp <= previous_timestamp:
             raise VideoError(f"第 {index} 张截图的时间戳无效")
-        if image.name != f"frame-{index:06d}.jpg" or image.stat().st_size < 4:
+        if image.name != f"frame-{index:06d}.jpg":
             raise VideoError(f"截图文件无效 {image.name}")
-        with image.open("rb") as file:
-            header = file.read(2)
-            file.seek(-2, 2)
-            if header != b"\xff\xd8" or file.read(2) != b"\xff\xd9":
-                raise VideoError(f"JPEG 截图不完整 {image.name}")
+        validate_jpeg(image)
         frames.append({"path": image.name, "timestampMs": timestamp})
         previous_timestamp = timestamp
     return frames

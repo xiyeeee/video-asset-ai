@@ -16,6 +16,8 @@ from app.pipeline.asset_task_models import (
     AudioResult,
     AudioStage,
     BranchState,
+    ShotResult,
+    ShotStage,
 )
 from app.pipeline.character_task_models import (
     TaskError,
@@ -25,6 +27,7 @@ from app.pipeline.character_task_models import (
     TaskStatus,
 )
 from app.pipeline.character_tasks import RunTask, TaskConflict, task_error
+from app.pipeline.shot_extraction import extract_shots
 from app.storage.shared_files import (
     InvalidSourceReference,
     SourceVideoNotFound,
@@ -74,15 +77,19 @@ class AssetTasks:
         self.audio_executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="audio-extraction"
         )
+        self.shot_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="shot-extraction"
+        )
         self.executors = {
             AssetKind.CHARACTERS: character_executor,
             AssetKind.AUDIO: self.audio_executor,
+            AssetKind.SHOTS: self.shot_executor,
         }
         self.entries: dict[str, AssetTaskEntry] = {}
         self.lock = Lock()
 
     def submit(self, request: AssetTaskRequest) -> AssetTaskState:
-        # 音频分支不读抽帧间隔。人物分支把缺省间隔归一化后再比较幂等参数。
+        # 只有人物分支使用抽帧间隔。有该分支时先归一化缺省值再比较幂等参数。
         interval = (
             request.frame_interval_seconds
             or self.settings.character_frame_interval_seconds
@@ -126,6 +133,7 @@ class AssetTasks:
 
     def close(self) -> None:
         self.audio_executor.shutdown()
+        self.shot_executor.shutdown()
 
     def execute_branch(self, task: AssetTaskRequest, kind: AssetKind) -> None:
         task_id = task.task_id
@@ -139,7 +147,8 @@ class AssetTasks:
                 self.entries[task_id].branches[kind] = state
 
         def report(
-            stage: TaskStage | AudioStage, progress: TaskProgress | None = None
+            stage: TaskStage | AudioStage | ShotStage,
+            progress: TaskProgress | None = None,
         ) -> None:
             nonlocal stage_started_at
             now = perf_counter()
@@ -158,9 +167,13 @@ class AssetTasks:
         save(state)
         try:
             source = resolve_source_video(self.input_root, task.source_video_ref)
-            result: TaskResult | AudioResult
+            result: TaskResult | AudioResult | ShotResult
             if kind is AssetKind.CHARACTERS:
                 result = self.run_characters(task, source, report)
+            elif kind is AssetKind.SHOTS:
+                result = extract_shots(
+                    task_id, source, self.output_root, self.settings, report
+                )
             else:
                 report(AudioStage.EXTRACTING_AUDIO)
                 with stage_task_directory(self.output_root) as temporary:
@@ -205,12 +218,20 @@ class AssetTasks:
 
 
 def branch_error(
-    exc: Exception, kind: AssetKind, stage: TaskStage | AudioStage | None
+    exc: Exception, kind: AssetKind, stage: TaskStage | AudioStage | ShotStage | None
 ) -> TaskError:
     if kind is AssetKind.CHARACTERS or isinstance(
         exc, (SourceVideoNotFound, InvalidSourceReference)
     ):
         return task_error(exc, stage if isinstance(stage, TaskStage) else None)
+    if kind is AssetKind.SHOTS:
+        if isinstance(exc, VideoTimeout):
+            return TaskError(code="SHOT_EXTRACTION_TIMEOUT", message="分镜提取超时")
+        if stage is ShotStage.EXTRACTING_PREVIEWS:
+            return TaskError(code="SHOT_PREVIEW_FAILED", message="分镜代表图提取失败")
+        if stage is ShotStage.WRITING_RESULTS:
+            return TaskError(code="SHOT_WRITE_FAILED", message="分镜清单校验或发布失败")
+        return TaskError(code="SHOT_DETECTION_FAILED", message="无法识别视频镜头")
     if isinstance(exc, AudioStreamNotFound):
         return TaskError(code="AUDIO_STREAM_NOT_FOUND", message="源视频没有音轨")
     if isinstance(exc, VideoTimeout):

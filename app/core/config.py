@@ -17,3 +17,7 @@ class Settings(BaseSettings):
     character_frame_interval_seconds: float = Field(
         default=2, gt=0, allow_inf_nan=False
     )
+    shot_scene_threshold: float = Field(default=10, gt=0, le=100, allow_inf_nan=False)
+    shot_ignore_bottom_fraction: float = Field(
+        default=0.2, ge=0, lt=1, allow_inf_nan=False
+    )

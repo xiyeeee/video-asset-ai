@@ -1,6 +1,6 @@
 # video-asset-ai
 
-漫剧视频素材处理服务，与 Java 后端 `video-asset-server` 同级。项目提供 HTTP 健康检查、本地视频抽帧、单镜头人物提取 CLI 和异步人物提取接口。Java 提交及轮询任务的契约见 [Java 对接文档](docs/java-character-extraction-api.md)。 人物和音轨可通过 [并行素材提取接口](docs/java-asset-extraction-api.md) 按需提交。
+漫剧视频素材处理服务，与 Java 后端 `video-asset-server` 同级。项目提供 HTTP 健康检查、本地视频抽帧、单镜头人物提取 CLI 和异步人物提取接口。Java 提交及轮询任务的契约见 [Java 对接文档](docs/java-character-extraction-api.md)。人物、音轨和分镜可通过 [并行素材提取接口](docs/java-asset-extraction-api.md) 按需提交。
 
 ## macOS 环境准备
 
