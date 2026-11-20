@@ -9,9 +9,11 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.api.asset_tasks import router as asset_task_router
 from app.api.character_tasks import router as character_task_router
 from app.api.health import router as health_router
 from app.core.config import Settings
+from app.pipeline.asset_tasks import AssetTasks
 from app.pipeline.character_extraction import CharacterExtraction
 from app.pipeline.character_tasks import CharacterTasks
 
@@ -24,17 +26,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     for module in ("httpx", "httpx2"):
         logging.getLogger(module).setLevel(logging.WARNING)
     settings = Settings()
-    tasks = CharacterTasks(settings, CharacterExtraction(settings).run)
+    extraction = CharacterExtraction(settings)
+    tasks = CharacterTasks(settings, extraction.run)
+    asset_tasks = AssetTasks(settings, extraction.run, tasks.executor)
     app.state.character_tasks = tasks
+    app.state.asset_tasks = asset_tasks
     try:
         yield
     finally:
-        await asyncio.to_thread(tasks.close)
+        await asyncio.gather(
+            asyncio.to_thread(tasks.close), asyncio.to_thread(asset_tasks.close)
+        )
 
 
 app = FastAPI(title="video-asset-ai", openapi_url=None, lifespan=lifespan)
 app.include_router(health_router)
 app.include_router(character_task_router)
+app.include_router(asset_task_router)
 
 
 @app.exception_handler(RequestValidationError)
