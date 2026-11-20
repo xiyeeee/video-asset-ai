@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,3 +12,8 @@ class Settings(BaseSettings):
     grounding_dino_model: str = "IDEA-Research/grounding-dino-tiny"
     sam2_model: str = "facebook/sam2.1-hiera-tiny"
     character_device: str = "cpu"
+    character_input_root: Path = Path("samples")
+    character_output_root: Path = Path("outputs/character-tasks")
+    character_frame_interval_seconds: float = Field(
+        default=2, gt=0, allow_inf_nan=False
+    )

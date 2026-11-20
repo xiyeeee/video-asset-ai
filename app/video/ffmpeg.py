@@ -23,6 +23,10 @@ class VideoError(Exception):
     """视频工具调用或结果校验失败。"""
 
 
+class VideoTimeout(VideoError):
+    """视频工具执行超时。"""
+
+
 @dataclass(frozen=True)
 class VideoInfo:
     duration_seconds: float
@@ -57,7 +61,7 @@ def run_tool(
             timeout=timeout,
         )
     except subprocess.TimeoutExpired as exc:
-        raise VideoError(f"{executable} 运行超过 {timeout} 秒") from exc
+        raise VideoTimeout(f"{executable} 运行超过 {timeout} 秒") from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip()[-2400:]
         raise VideoError(f"{executable} 退出码 {exc.returncode}\n{detail}") from exc

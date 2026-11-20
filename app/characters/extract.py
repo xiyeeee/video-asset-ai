@@ -1,4 +1,6 @@
 import logging
+import math
+from collections.abc import Callable
 from os.path import relpath
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -29,7 +31,7 @@ class Detection(BaseModel):
 
 class ProcessedFrame(BaseModel):
     source_frame: str = Field(serialization_alias="sourceFrame")
-    timestamp_ms: float = Field(serialization_alias="timestampMs")
+    timestamp_ms: int | float = Field(serialization_alias="timestampMs")
     debug_image: str = Field(serialization_alias="debugImage")
 
 
@@ -101,11 +103,25 @@ def write_debug_image(
     preview.save(path)
 
 
+def detect_in_frame(
+    manifest: Path, frame: SourceFrame, model: PersonModels
+) -> list[Detection]:
+    try:
+        with Image.open(manifest.parent / frame.path) as source:
+            return model.detect(source.convert("RGB"))
+    except Exception as exc:
+        raise RuntimeError(f"检测截图 {frame.path} 失败，{exc}") from exc
+
+
 def extract_characters(
     manifest: Path,
     frames: list[SourceFrame],
     output: Path,
     model: PersonModels,
+    *,
+    on_detected: Callable[[int], None] | None = None,
+    on_writing: Callable[[], None] | None = None,
+    whole_milliseconds: bool = False,
 ) -> CharactersManifest:
     started_at = perf_counter()
     output = output.absolute()
@@ -118,14 +134,18 @@ def extract_characters(
         characters=[],
     )
     logger.info("开始人物提取，%d 张截图，输出 %s", len(frames), output)
+    detections_by_frame = [detect_in_frame(manifest, frame, model) for frame in frames]
+    if on_detected is not None:
+        on_detected(sum(len(detections) for detections in detections_by_frame))
     with TemporaryDirectory(prefix=".characters-", dir=output.parent) as temporary:
         staged = Path(temporary) / "result"
         staged.mkdir()
-        for frame_index, frame in enumerate(frames, start=1):
+        for frame_index, (frame, detections) in enumerate(
+            zip(frames, detections_by_frame, strict=True), start=1
+        ):
             try:
                 with Image.open(manifest.parent / frame.path) as source:
                     image = source.convert("RGB")
-                detections = model.detect(image)
                 masks = model.segment(image, detections) if detections else []
                 if len(masks) != len(detections):
                     raise ValueError(
@@ -137,9 +157,15 @@ def extract_characters(
                 (staged / frame_dir).mkdir()
                 debug_path = f"{frame_dir}/detections.jpg"
                 write_debug_image(image, detections, staged / debug_path)
+                # Java 以整数毫秒消费实际 PTS，CLI 继续保留抽帧清单中的小数精度。
+                timestamp_ms = (
+                    math.floor(frame.timestamp_ms + 0.5)
+                    if whole_milliseconds
+                    else frame.timestamp_ms
+                )
                 processed = ProcessedFrame(
                     source_frame=frame.path,
-                    timestamp_ms=frame.timestamp_ms,
+                    timestamp_ms=timestamp_ms,
                     debug_image=debug_path,
                 )
                 for index, (detection, mask) in enumerate(
@@ -174,6 +200,8 @@ def extract_characters(
                 )
             except (OSError, RuntimeError, ValueError) as exc:
                 raise ValueError(f"处理截图 {frame.path} 失败，{exc}") from exc
+        if on_writing is not None:
+            on_writing()
         (staged / "characters.json").write_text(
             result.model_dump_json(by_alias=True, indent=2) + "\n", encoding="utf-8"
         )
