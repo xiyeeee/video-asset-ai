@@ -7,6 +7,7 @@ from time import perf_counter
 from uuid import uuid4
 
 from app.audio.extract import AudioStreamNotFound, extract_audio
+from app.backgrounds.select import DetectPeople
 from app.core.config import Settings
 from app.dialogue.transcribe import DialogueModelUnavailable, DialogueTranscriber
 from app.pipeline.asset_task_models import (
@@ -16,11 +17,18 @@ from app.pipeline.asset_task_models import (
     AssetTaskStatus,
     AudioResult,
     AudioStage,
+    BackgroundStage,
     BranchResult,
     BranchStage,
     BranchState,
     DialogueStage,
+    ShotResult,
     ShotStage,
+)
+from app.pipeline.background_extraction import (
+    BackgroundShotManifestInvalid,
+    BackgroundShotsFailed,
+    extract_backgrounds,
 )
 from app.pipeline.character_task_models import (
     TaskError,
@@ -42,6 +50,10 @@ from app.storage.shared_files import (
 from app.video.ffmpeg import VideoError, VideoTimeout
 
 logger = logging.getLogger(__name__)
+BRANCH_DEPENDENCIES = {
+    AssetKind.DIALOGUE: AssetKind.AUDIO,
+    AssetKind.BACKGROUND: AssetKind.SHOTS,
+}
 
 
 @dataclass
@@ -72,11 +84,13 @@ class AssetTasks:
         settings: Settings,
         run_characters: RunTask,
         character_executor: ThreadPoolExecutor,
+        detect_people: DetectPeople,
     ) -> None:
         self.settings = settings
         self.input_root = settings.character_input_root.resolve()
         self.output_root = settings.character_output_root.resolve()
         self.run_characters = run_characters
+        self.detect_people = detect_people
         self.audio_executor = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="audio-extraction"
         )
@@ -89,6 +103,7 @@ class AssetTasks:
         self.transcribe_dialogue = DialogueTranscriber(settings).transcribe
         self.executors = {
             AssetKind.CHARACTERS: character_executor,
+            AssetKind.BACKGROUND: character_executor,
             AssetKind.AUDIO: self.audio_executor,
             AssetKind.SHOTS: self.shot_executor,
             AssetKind.DIALOGUE: self.dialogue_executor,
@@ -120,19 +135,17 @@ class AssetTasks:
             logger.info(
                 "taskId=%s 素材编排已受理 outputs=%s", task_id, list(entry.branches)
             )
-            # 同一任务只登记一次，各分支进入各自的队列。人物分支继续使用原推理队列。
-            audio_future: Future[BranchState] | None = None
-            # 音频和对白用不同线程。联合任务通过已发布的 WAV 共享一次源音轨解码。
-            for kind in entry.branches:
+            # 先排队独立分支，再排队有依赖的分支。背景与人物检测共用执行线程。
+            submitted: dict[AssetKind, Future[BranchState]] = {}
+            for kind in sorted(
+                entry.branches, key=lambda item: item in BRANCH_DEPENDENCIES
+            ):
+                parent = BRANCH_DEPENDENCIES.get(kind)
+                dependency = submitted.get(parent) if parent is not None else None
                 try:
-                    future = self.executors[kind].submit(
-                        self.execute_branch,
-                        effective,
-                        kind,
-                        audio_future if kind is AssetKind.DIALOGUE else None,
+                    submitted[kind] = self.executors[kind].submit(
+                        self.execute_branch, effective, kind, dependency
                     )
-                    if kind is AssetKind.AUDIO:
-                        audio_future = future
                 except RuntimeError:
                     logger.exception("taskId=%s branch=%s 无法排队", task_id, kind)
                     entry.branches[kind] = BranchState(
@@ -157,7 +170,7 @@ class AssetTasks:
         self,
         task: AssetTaskRequest,
         kind: AssetKind,
-        audio_future: Future[BranchState] | None,
+        dependency: Future[BranchState] | None,
     ) -> BranchState:
         task_id = task.task_id
         started_at = stage_started_at = perf_counter()
@@ -205,8 +218,23 @@ class AssetTasks:
                     self.settings,
                     self.transcribe_dialogue,
                     report,
-                    (lambda: self.shared_audio(audio_future))
+                    (lambda: self.shared_audio(dependency))
                     if AssetKind.AUDIO in task.outputs
+                    else None,
+                )
+            elif kind is AssetKind.BACKGROUND:
+                shot_ref = task.shot_manifest_ref
+                result = extract_backgrounds(
+                    task_id,
+                    source,
+                    self.output_root,
+                    self.settings,
+                    self.detect_people,
+                    report,
+                    (lambda: self.shared_shot_ref(dependency))
+                    if AssetKind.SHOTS in task.outputs
+                    else (lambda: shot_ref)
+                    if shot_ref is not None
                     else None,
                 )
             else:
@@ -252,6 +280,14 @@ class AssetTasks:
             )
         return state
 
+    @staticmethod
+    def shared_shot_ref(future: Future[BranchState] | None) -> str:
+        if future is not None and isinstance(
+            result := future.result().result, ShotResult
+        ):
+            return result.manifest_ref
+        raise BackgroundShotsFailed("分镜分支未生成有效清单")
+
     def shared_audio(self, future: Future[BranchState] | None) -> Path:
         if future is None:
             raise VideoError("共享音频分支无法排队")
@@ -283,6 +319,26 @@ def branch_error(
         if stage is ShotStage.WRITING_RESULTS:
             return TaskError(code="SHOT_WRITE_FAILED", message="分镜清单校验或发布失败")
         return TaskError(code="SHOT_DETECTION_FAILED", message="无法识别视频镜头")
+    if kind is AssetKind.BACKGROUND:
+        if isinstance(exc, VideoTimeout):
+            return TaskError(
+                code="BACKGROUND_EXTRACTION_TIMEOUT", message="背景提取超时"
+            )
+        if isinstance(exc, BackgroundShotManifestInvalid):
+            return TaskError(
+                code="BACKGROUND_SHOT_MANIFEST_INVALID", message="分镜清单无效或不可读"
+            )
+        if isinstance(exc, BackgroundShotsFailed):
+            return TaskError(
+                code="BACKGROUND_SHOTS_FAILED", message="背景依赖的分镜未完成"
+            )
+        if stage is BackgroundStage.WRITING_RESULTS:
+            return TaskError(
+                code="BACKGROUND_WRITE_FAILED", message="背景清单校验或发布失败"
+            )
+        return TaskError(
+            code="BACKGROUND_CANDIDATE_FAILED", message="背景候选帧提取或遮挡检测失败"
+        )
     if kind is AssetKind.DIALOGUE:
         if isinstance(exc, AudioStreamNotFound):
             return TaskError(code="AUDIO_STREAM_NOT_FOUND", message="源视频没有音轨")

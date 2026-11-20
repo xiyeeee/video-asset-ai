@@ -20,12 +20,13 @@ def extract_shots(
     report: Callable[[ShotStage], None],
 ) -> ShotResult:
     report(ShotStage.DETECTING_SHOTS)
-    manifest, selected = detect_shots(source, settings)
+    analysis = detect_shots(source, settings)
+    manifest = analysis.manifest
     with stage_task_directory(output_root) as temporary:
         staged = Path(temporary) / "result"
         staged.mkdir()
         report(ShotStage.EXTRACTING_PREVIEWS)
-        extract_shot_previews(source, staged, selected, settings)
+        extract_shot_previews(source, staged, analysis.previews, settings)
         report(ShotStage.WRITING_RESULTS)
         for shot in manifest.shots:
             checked_file(staged, staged, shot.preview_path)

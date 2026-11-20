@@ -1,6 +1,6 @@
 # 并行素材提取任务
 
-使用统一的素材任务接口按需提取人物、音轨、分镜或对白。人物路线复用现有抽帧、检测、分割及清单发布逻辑。音频路线直接读取同一源视频，导出第一条音轨为 16 位 PCM WAV，保留采样率和声道数。分镜路线扫描源视频并为每个镜头生成一张 JPEG。各分支可以并行运行，并独立发布文件。
+使用统一的素材任务接口按需提取人物、音轨、分镜、对白或背景候选。人物路线复用现有抽帧、检测、分割及清单发布逻辑。音频路线直接读取同一源视频，导出第一条音轨为 16 位 PCM WAV，保留采样率和声道数。分镜路线扫描源视频并为每个镜头生成一张 JPEG。各分支可以并行运行，并独立发布文件。
 
 启动、模型配置及共享目录沿用 [Java 人物提取对接文档](java-character-extraction-api.md)。新旧人物任务共用一个人物执行线程，音频和分镜各使用一个独立执行线程。服务仍按单进程部署。
 
@@ -16,7 +16,7 @@ curl --fail-with-body -X POST http://127.0.0.1:19000/internal/v1/asset-extractio
 curl --fail-with-body http://127.0.0.1:19000/internal/v1/asset-extraction/tasks/episode-assets-001
 ```
 
-`outputs` 至少包含一个分支，可选 `CHARACTERS`、`AUDIO`、`SHOTS` 和 `DIALOGUE`。只传 `AUDIO` 时只导出音轨。人物抽帧间隔可省略，服务使用 `CHARACTER_FRAME_INTERVAL_SECONDS`。源视频引用相对于共享输入根目录。提交同 ID、同源文件引用、同分支集合和同生效间隔时返回已有快照。分支顺序不影响幂等判断。只在包含人物分支时比较有效抽帧间隔。有效参数冲突返回 `409 TASK_CONFLICT`。非法源引用返回 `422 SOURCE_VIDEO_REF_INVALID`，源文件缺失或任务不存在返回 `404` 及对应错误码。
+`outputs` 至少包含一个分支，可选 `CHARACTERS`、`AUDIO`、`SHOTS`、`DIALOGUE` 和 `BACKGROUND`。只传 `AUDIO` 时只导出音轨。人物抽帧间隔可省略，服务使用 `CHARACTER_FRAME_INTERVAL_SECONDS`。源视频引用相对于共享输入根目录。提交同 ID、同源文件引用、同分支集合和同生效间隔时返回已有快照。分支顺序不影响幂等判断。只在包含人物分支时比较有效抽帧间隔。有效参数冲突返回 `409 TASK_CONFLICT`。非法源引用返回 `422 SOURCE_VIDEO_REF_INVALID`，源文件缺失或任务不存在返回 `404` 及对应错误码。
 
 查询响应示例。音频完成后即可读取文件，整单仍在运行。
 
@@ -98,3 +98,21 @@ uv run --locked --extra characters --extra dialogue uvicorn app.main:app --host 
 | `DIALOGUE_SPEAKER_MODEL` | `cam++`，配置空字符串时只转写 |
 
 同一任务选择 `AUDIO` 和 `DIALOGUE` 时，音频分支先发布 WAV，对白复用这份音频。对白清单对齐原视频播放时间；说话人识别不可用时继续生成带时间戳的台词。Python 3.11.18、Apple Silicon 已检查依赖导入和本地任务行为，真实权重转写与三端联调待集中验收。
+
+## 背景扩展
+
+`BACKGROUND` 从原视频的每个镜头选一张背景候选 JPEG。分镜复用、候选图状态、清单及对外素材接口见 [按分镜提取背景三端契约](background-extraction-contract.md)。
+
+从镜头中约 25%、50% 和 75% 的位置选择最近的实际帧，同一帧只检查一次。优先选择人物画面占用少的候选，再比较清晰度与距离镜头中点的远近。背景和人物共用模型执行线程，分镜仍在自己的线程执行。`BACKGROUND` 使用 `characters` 依赖组。
+
+当前没有可复用的画面字幕检测，因此输出图的 `subtitleStatus` 为 `UNKNOWN`，前端按 `NEEDS_REVIEW` 展示。产物保留原帧画面和实际时间戳。
+
+调用示例：
+
+```bash
+curl --fail-with-body -X POST http://127.0.0.1:19000/internal/v1/asset-extraction/tasks \
+  -H 'Content-Type: application/json' \
+  -d '{"taskId":"episode-background-001","sourceVideoRef":"uploads/episode-01.mp4","outputs":["SHOTS","BACKGROUND"]}'
+```
+
+通过 `GET /internal/v1/asset-extraction/tasks/episode-background-001` 查看进度。已有分镜时，可以只提交 `BACKGROUND` 并传入此前的 `shotManifestRef`。

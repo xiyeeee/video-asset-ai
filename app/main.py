@@ -28,7 +28,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = Settings()
     extraction = CharacterExtraction(settings)
     tasks = CharacterTasks(settings, extraction.run)
-    asset_tasks = AssetTasks(settings, extraction.run, tasks.executor)
+    asset_tasks = AssetTasks(
+        settings, extraction.run, tasks.executor, extraction.detect_people
+    )
     app.state.character_tasks = tasks
     app.state.asset_tasks = asset_tasks
     try:

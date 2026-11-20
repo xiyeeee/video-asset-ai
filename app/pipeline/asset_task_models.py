@@ -1,6 +1,7 @@
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.pipeline.character_task_models import (
     TaskError,
@@ -18,10 +19,22 @@ class AssetKind(StrEnum):
     AUDIO = "AUDIO"
     SHOTS = "SHOTS"
     DIALOGUE = "DIALOGUE"
+    BACKGROUND = "BACKGROUND"
 
 
 class AssetTaskRequest(TaskRequest):
     outputs: frozenset[AssetKind] = Field(min_length=1)
+    shot_manifest_ref: str | None = Field(
+        default=None, alias="shotManifestRef", min_length=1, max_length=4096
+    )
+
+    @model_validator(mode="after")
+    def check_shot_ref(self) -> Self:
+        if self.shot_manifest_ref is not None and (
+            AssetKind.BACKGROUND not in self.outputs or AssetKind.SHOTS in self.outputs
+        ):
+            raise ValueError("shotManifestRef 仅用于没有同时请求 SHOTS 的背景任务")
+        return self
 
 
 class AssetTaskStatus(StrEnum):
@@ -63,8 +76,19 @@ class DialogueResult(BaseModel, frozen=True):
     segment_count: int = Field(serialization_alias="segmentCount")
 
 
-BranchStage = TaskStage | AudioStage | ShotStage | DialogueStage
-BranchResult = TaskResult | AudioResult | ShotResult | DialogueResult
+class BackgroundStage(StrEnum):
+    RESOLVING_SHOTS = "RESOLVING_SHOTS"
+    SELECTING_BACKGROUND_FRAMES = "SELECTING_BACKGROUND_FRAMES"
+    WRITING_RESULTS = "WRITING_RESULTS"
+
+
+class BackgroundResult(BaseModel, frozen=True):
+    manifest_ref: str = Field(serialization_alias="manifestRef")
+    background_count: int = Field(serialization_alias="backgroundCount")
+
+
+BranchStage = TaskStage | AudioStage | ShotStage | DialogueStage | BackgroundStage
+BranchResult = TaskResult | AudioResult | ShotResult | DialogueResult | BackgroundResult
 
 
 class BranchState(BaseModel, frozen=True):

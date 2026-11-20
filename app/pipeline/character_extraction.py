@@ -19,7 +19,9 @@ from app.storage.shared_files import (
 from app.video.ffmpeg import extract_frames
 
 if TYPE_CHECKING:
-    from app.characters.extract import PersonModels
+    from PIL.Image import Image
+
+    from app.characters.extract import Detection, PersonModels
 
 ReportStage = Callable[[TaskStage, TaskProgress], None]
 
@@ -43,6 +45,9 @@ class CharacterExtraction:
             raise CharacterModelsUnavailable(
                 "无法加载 Grounding DINO 或 SAM 2"
             ) from exc
+
+    def detect_people(self, image: "Image") -> list["Detection"]:
+        return self.person_models.detect(image)
 
     def run(self, task: TaskRequest, source: Path, report: ReportStage) -> TaskResult:
         interval = (
