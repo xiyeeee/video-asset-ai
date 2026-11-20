@@ -20,13 +20,13 @@ ffprobe -version
 在项目根目录运行：
 
 ```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+uv run uvicorn app.main:app --host 127.0.0.1 --port 19000 --reload
 ```
 
 另开一个终端请求健康检查：
 
 ```bash
-curl --fail http://127.0.0.1:8000/health
+curl --fail http://127.0.0.1:19000/health
 ```
 
 两个工具均能执行时，响应如下。任一工具缺失或运行失败时，`status` 为 `degraded`，对应工具字段为 `false`，HTTP 仍返回 200。

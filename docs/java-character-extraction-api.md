@@ -11,7 +11,7 @@ uv sync --extra characters
 CHARACTER_INPUT_ROOT=/shared/video-input \
 CHARACTER_OUTPUT_ROOT=/shared/video-output \
 CHARACTER_FRAME_INTERVAL_SECONDS=2 \
-uv run --extra characters uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+uv run --extra characters uvicorn app.main:app --host 127.0.0.1 --port 19000 --workers 1
 ```
 
 | 配置项 | 本地默认值 | 用途 |
@@ -154,11 +154,11 @@ HTTP 验收任务 `hero-delivery-001` 的实际成功响应。Java 读取自己�
 将待验证的短视频放到 `samples/uploads/episode-01.mp4`，使用默认共享目录启动后执行：
 
 ```bash
-curl --fail-with-body -X POST http://127.0.0.1:8000/internal/v1/character-extraction/tasks \
+curl --fail-with-body -X POST http://127.0.0.1:19000/internal/v1/character-extraction/tasks \
   -H 'Content-Type: application/json' \
   -d '{"taskId":"task-001","sourceVideoRef":"uploads/episode-01.mp4","frameIntervalSeconds":1}'
 
-curl --fail-with-body http://127.0.0.1:8000/internal/v1/character-extraction/tasks/task-001
+curl --fail-with-body http://127.0.0.1:19000/internal/v1/character-extraction/tasks/task-001
 ```
 
 重复查询直至终态。从 `outputs/character-tasks/` 下的 `manifestRef` 读取清单，按清单路径打开透明 PNG。对照原视频画面和抽帧清单核对时间戳。
