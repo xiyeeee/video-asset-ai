@@ -22,7 +22,14 @@ uv run --extra characters uvicorn app.main:app --host 127.0.0.1 --port 19000 --w
 | `CHARACTER_DEVICE` | `cpu` | 人物模型设备，可配 `mps` |
 | `FFMPEG_PATH`、`FFPROBE_PATH` | `ffmpeg`、`ffprobe` | 系统视频工具 |
 
-也可通过 `.env` 加载配置，模型权重配置见项目 README。相对的根目录以服务进程启动目录为基准。Java 与 Python 可以用不同的挂载绝对路径，但须看到同一批文件。Python 需要在输出根目录下创建目录和重命名的权限，Java 需要读取权限。验收和部署时使用单个 Uvicorn worker，启动命令不带 `--reload`。每个进程只有一个后台执行线程，同一时刻处理一个任务，模型在该线程首次使用时加载并在后续任务中复用。
+本地通过 Java 提交任务时，先在 Python 项目根目录的 `.env` 配置与 Java 相同的输入和输出目录。Java 从同级的 `video-asset-server` 根目录启动并使用默认配置时，可填写：
+
+```dotenv
+CHARACTER_INPUT_ROOT=../video-asset-server/.local/character-input
+CHARACTER_OUTPUT_ROOT=../video-asset-server/.local/character-output
+```
+
+保存后重启 Python。相对的根目录以服务进程启动目录为基准。模型权重配置见项目 README。Java 与 Python 可以用不同的挂载绝对路径，但须看到同一批文件。Python 需要在输出根目录下创建目录和重命名的权限，Java 需要读取权限。验收和部署时使用单个 Uvicorn worker，启动命令不带 `--reload`。每个进程只有一个后台执行线程，同一时刻处理一个任务，模型在该线程首次使用时加载并在后续任务中复用。
 
 ## 提交任务
 
