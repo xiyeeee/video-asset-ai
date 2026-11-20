@@ -21,3 +21,7 @@ class Settings(BaseSettings):
     shot_ignore_bottom_fraction: float = Field(
         default=0.2, ge=0, lt=1, allow_inf_nan=False
     )
+    dialogue_asr_model: str = "paraformer-zh"
+    dialogue_vad_model: str = "fsmn-vad"
+    dialogue_punctuation_model: str = "ct-punc"
+    dialogue_speaker_model: str = "cam++"

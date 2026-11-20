@@ -17,6 +17,7 @@ class AssetKind(StrEnum):
     CHARACTERS = "CHARACTERS"
     AUDIO = "AUDIO"
     SHOTS = "SHOTS"
+    DIALOGUE = "DIALOGUE"
 
 
 class AssetTaskRequest(TaskRequest):
@@ -51,11 +52,26 @@ class ShotResult(BaseModel, frozen=True):
     shot_count: int = Field(serialization_alias="shotCount")
 
 
+class DialogueStage(StrEnum):
+    PREPARING_AUDIO = "PREPARING_AUDIO"
+    TRANSCRIBING_DIALOGUE = "TRANSCRIBING_DIALOGUE"
+    WRITING_RESULTS = "WRITING_RESULTS"
+
+
+class DialogueResult(BaseModel, frozen=True):
+    manifest_ref: str = Field(serialization_alias="manifestRef")
+    segment_count: int = Field(serialization_alias="segmentCount")
+
+
+BranchStage = TaskStage | AudioStage | ShotStage | DialogueStage
+BranchResult = TaskResult | AudioResult | ShotResult | DialogueResult
+
+
 class BranchState(BaseModel, frozen=True):
     status: TaskStatus = TaskStatus.QUEUED
-    stage: TaskStage | AudioStage | ShotStage | None = None
+    stage: BranchStage | None = None
     progress: TaskProgress | None = None
-    result: TaskResult | AudioResult | ShotResult | None = None
+    result: BranchResult | None = None
     error: TaskError | None = None
 
 

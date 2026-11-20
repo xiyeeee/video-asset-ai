@@ -17,6 +17,12 @@ characters = [
     "torchvision<1",
     "transformers>=5.5,<6",
 ]
+dialogue = [
+    "funasr>=1.4.27",
+    "modelscope>=1.40.3",
+    "torch>=2.6,<3",
+    "torchaudio>=2.6,<3",
+]
 
 [dependency-groups]
 dev = [
