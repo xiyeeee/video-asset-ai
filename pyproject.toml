@@ -1,0 +1,24 @@
+[project]
+name = "video-asset-ai"
+version = "0.1.0"
+description = "漫剧视频素材处理服务"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+    "fastapi>=0.165.0",
+    "pydantic-settings>=2.16.3",
+    "uvicorn>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
