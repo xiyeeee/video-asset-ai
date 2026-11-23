@@ -20,8 +20,10 @@ ffprobe -version
 在项目根目录运行：
 
 ```bash
-uv run uvicorn app.main:app --host 127.0.0.1 --port 19000 --reload
+make dev
 ```
+
+默认监听 `127.0.0.1:19000`，以单 worker 启动，并由 uv 按锁文件同步人物和对白依赖。
 
 另开一个终端请求健康检查：
 

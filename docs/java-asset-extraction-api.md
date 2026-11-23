@@ -84,8 +84,7 @@ curl --fail-with-body http://127.0.0.1:19000/internal/v1/asset-extraction/tasks/
 在项目根目录安装依赖并启动支持人物和对白的服务：
 
 ```bash
-uv sync --locked --extra characters --extra dialogue
-uv run --locked --extra characters --extra dialogue uvicorn app.main:app --host 127.0.0.1 --port 19000 --workers 1
+make dev
 ```
 
 对白在独立的单线程中用 CPU 推理，首次执行时加载模型。以下配置接受 FunASR 的 ModelScope 模型名或本地权重目录。
