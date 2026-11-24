@@ -21,9 +21,11 @@ ffprobe -version
 
 ```bash
 make dev
+make stop
+make restart
 ```
 
-默认监听 `127.0.0.1:19000`，以单 worker 启动，并由 uv 按锁文件同步人物和对白依赖。
+默认监听 `127.0.0.1:19000`，以单 worker 启动，并由 uv 按锁文件同步人物和对白依赖。`make stop` 会结束占用该端口的进程，包括被挂起后仍占着端口的进程。`make restart` 先停止再启动。
 
 另开一个终端请求健康检查：
 
