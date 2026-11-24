@@ -28,6 +28,7 @@ def workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("LIVE2D_OUTPUT_ROOT", str(tmp_path / "output"))
     monkeypatch.setenv("LIVE2D_CONVERTER_ARGV", "[]")
     monkeypatch.setenv("LIVE2D_CORE_LIBRARY", str(tmp_path / "not-installed.dylib"))
+    monkeypatch.setenv("LIVE2D_WEB_CORE_JS", str(tmp_path / "not-installed.js"))
     return tmp_path
 
 

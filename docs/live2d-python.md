@@ -20,6 +20,10 @@ uv run --locked --extra characters --extra live2d uvicorn app.main:app --host 12
 | `LIVE2D_NODE_PATH` | `node` | 执行 Web Core 的 Node 可执行文件，仅在配置 Web Core 时使用 |
 | `LIVE2D_TIMEOUT_SECONDS` | `1800` | 转换子进程超时秒数 |
 
+本机和同级 Java 项目联调时，将 Python 的 `LIVE2D_INPUT_ROOT` 和
+`LIVE2D_OUTPUT_ROOT` 设为 Java 仓库下 `.local/live2d-input` 与 `.local/live2d-output` 的绝对路径。
+修改 Python `.env` 后重启 Python 服务。
+
 执行器将 `--image <绝对路径> --output <尚不存在的目录>` 追加到 argv 后，以无界面模式启动，并提供 `LIVE2D_MODEL_NAME` 环境变量。包装器可用该值作为显示名，文件路径由生成工具确定。Java 请求不接受命令、权重路径或第三方凭据。供应商密钥及运行参数通过启动进程的环境变量注入。两套共享目录在容器或不同主机上可有不同的绝对路径，双方以相对引用读取同一存储。
 
 下例展示候选 `image-to-live2d` 的命令映射，完整运行条件及实测阻塞见后文。
@@ -33,7 +37,7 @@ export LIVE2D_CORE_LIBRARY='/absolute/path/libLive2DCubismCore.dylib'
 
 ### image2live2d 适配器
 
-已验证的本机路线用现有人物模型 Grounding DINO 和 SAM 2 拆出可见部件，随后用 image2live2d 无界面绑定并导出。实测环境为 M5 MacBook Air 16 GB、Python 3.11.18、MPS 和 Node 20.20.2。输入优先用单人、正面或近正面图，有透明通道时沿用角色轮廓。基础拆层处理可见的脸、头发、躯干及模型检测到的五官。遮挡后的内容、完整肢体切分及精细表情需要另行验证。
+已验证的本机路线用现有人物模型 Grounding DINO 和 SAM 2 拆出可见部件，随后用 image2live2d 无界面绑定并导出。实测环境为 M5 MacBook Air 16 GB、Python 3.11.18、MPS 和 Node 20.20.2。输入优先用单人、正面或近正面图，有透明通道时沿用角色轮廓。基础拆层处理可见的脸、头发、躯干及模型检测到的五官。无头发角色需要能识别出独立头部，机器人样图已验证可导出头部、躯干和双眼。遮挡后的内容、完整肢体切分及精细表情需要另行验证。
 
 ```bash
 uv venv --python 3.11 outputs/image2live2d-env

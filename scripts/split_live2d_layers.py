@@ -19,13 +19,16 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 PARTS_PROMPT = "hair. face. eye. mouth. eyebrow. nose."
+HEAD_PROMPT = "head. robot head. helmet."
 
 
-def detect_parts(image: Image, models: GroundedSam2) -> dict[str, list[Detection]]:
+def detect_parts(
+    image: Image, models: GroundedSam2, prompt: str = PARTS_PROMPT
+) -> dict[str, list[Detection]]:
     import torch
 
     inputs = models.detector_processor(
-        images=image, text=PARTS_PROMPT, return_tensors="pt"
+        images=image, text=prompt, return_tensors="pt"
     ).to(models.device)
     with torch.inference_mode():
         output = models.detector(**inputs)
@@ -57,7 +60,7 @@ def detect_parts(image: Image, models: GroundedSam2) -> dict[str, list[Detection
 
 def split_image(source: Path, output: Path, models: GroundedSam2) -> None:
     from PIL import Image as PILImage
-    from PIL import ImageChops, ImageOps
+    from PIL import ImageChops, ImageOps, ImageStat
 
     with PILImage.open(source) as raw:
         original = ImageOps.exif_transpose(raw).convert("RGBA")
@@ -71,11 +74,29 @@ def split_image(source: Path, output: Path, models: GroundedSam2) -> None:
         alpha = models.segment(image, [max(people, key=lambda match: match.score)])[0]
 
     parts = detect_parts(image, models)
-    if not parts.get("face") or not parts.get("hair"):
-        raise ValueError("基础拆层需检测到脸和头发")
-    face, hair = (
-        max(parts[name], key=lambda match: match.score) for name in ("face", "hair")
-    )
+    silhouette = alpha.getbbox()
+    if silhouette is None:
+        raise ValueError("角色轮廓为空")
+    _, top, _, bottom = silhouette
+    head_limit = top + (bottom - top) * 0.75
+    face_candidates = parts.get("face", [])
+    hair_candidates = sorted(parts.get("hair", []), key=lambda match: -match.score)
+    if not hair_candidates or not face_candidates:
+        # 无头发角色仍可拆出头和躯干。检测器有时将整个角色当成一张脸，须排除这种候选。
+        face_candidates = [
+            candidate for candidate in face_candidates if candidate.box[3] <= head_limit
+        ]
+        if not face_candidates:
+            heads = detect_parts(image, models, HEAD_PROMPT)
+            face_candidates = [
+                candidate
+                for detections in heads.values()
+                for candidate in detections
+                if candidate.box[3] <= head_limit
+            ]
+    face = max(face_candidates, key=lambda match: match.score, default=None)
+    if face is None:
+        raise ValueError("未检测到可从躯干分离的头部")
 
     def mask_of(part: Detection, area: Image) -> Image:
         # 独立做提示框分割，再限制在该部件可见范围，保留与其他部件重叠的像素。
@@ -93,10 +114,22 @@ def split_image(source: Path, output: Path, models: GroundedSam2) -> None:
         limited.paste(segmented.crop(bounds), bounds[:2])
         return ImageChops.multiply(limited, area)
 
-    hair_mask = mask_of(hair, alpha)
-    face_mask = ImageChops.subtract(mask_of(face, alpha), hair_mask)
-    if not hair_mask.getbbox() or not face_mask.getbbox():
-        raise ValueError("脸或头发的分割结果为空")
+    face_mask = mask_of(face, alpha)
+    if not face_mask.getbbox():
+        raise ValueError("头部的分割结果为空")
+    hair_mask = PILImage.new("L", image.size)
+    minimum_face_area = ImageStat.Stat(face_mask).sum[0] / 2
+    for hair in hair_candidates:
+        candidate = mask_of(hair, alpha)
+        visible_face = ImageChops.subtract(face_mask, candidate)
+        # 长发的检测框可能误包住整个主体。剔除吞掉大半脸部的掩码，再尝试其他候选。
+        if (
+            candidate.getbbox()
+            and ImageStat.Stat(visible_face).sum[0] >= minimum_face_area
+        ):
+            hair_mask = candidate
+            face_mask = visible_face
+            break
     torso_mask = ImageChops.subtract(alpha, ImageChops.lighter(face_mask, hair_mask))
     if not torso_mask.getbbox():
         raise ValueError("躯干部件的分割结果为空")
