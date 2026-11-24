@@ -13,23 +13,75 @@ from time import perf_counter
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from image2live2d.backends.live2d.moc3_binary import Moc3
     from image2live2d.irr.schema import Rig
 
 logger = logging.getLogger(__name__)
 
 
-def export_rig(rig: Rig, layers: Path, output: Path) -> None:
+def preserve_canvas_aspect(
+    moc: Moc3, width: int, height: int, position_index_unit: int
+) -> None:
+    if width <= 0 or height <= 0:
+        raise ValueError("拆层画布尺寸必须为正数")
+    if width == height:
+        return
+
+    # 导出器把两个轴独立归一化到正方形。短轴按原图比例缩回，并同步调整画布。
+    longest_side = max(width, height)
+    scale_x, scale_y = width / longest_side, height / longest_side
+    for field, factor in (
+        ("width", scale_x),
+        ("originX", scale_x),
+        ("height", scale_y),
+        ("originY", scale_y),
+    ):
+        moc.canvas[field] *= factor
+
+    positions = moc.sections["keyformPositions"]["xys"]
+    for geometry_name, keyform_name in (
+        ("artMeshes", "artMeshKeyforms"),
+        ("warpDeformers", "warpDeformerKeyforms"),
+    ):
+        geometry = moc.sections[geometry_name]
+        keyform_positions = moc.sections[keyform_name][
+            "keyformPositionSourcesBeginIndices"
+        ]
+        for index, vertex_count in enumerate(geometry["vertexCounts"]):
+            # 网格变形器的子部件使用局部坐标。只缩放根网格和根变形器的模型空间顶点。
+            if (
+                geometry_name == "artMeshes"
+                and geometry["parentDeformerIndices"][index] >= 0
+            ):
+                continue
+            start = geometry["keyformSourcesBeginIndices"][index]
+            count = geometry["keyformSourcesCounts"][index]
+            for offset in keyform_positions[start : start + count]:
+                first = offset // position_index_unit
+                last = first + vertex_count
+                positions[first:last] = [
+                    (x * scale_x, y * scale_y) for x, y in positions[first:last]
+                ]
+
+
+def export_rig(
+    rig: Rig, layers: Path, output: Path, canvas_width: int, canvas_height: int
+) -> None:
     from image2live2d.backends.live2d import cdi3, model3, physics3
     from image2live2d.backends.live2d.moc3_binary import write_moc3
-    from image2live2d.backends.live2d.moc3_emit import build_atlas, rig_to_moc3
+    from image2live2d.backends.live2d.moc3_emit import (
+        KEYFORM_POS_UNIT,
+        build_atlas,
+        rig_to_moc3,
+    )
 
     output.mkdir(parents=True)
     (output / "textures").mkdir()
     atlas, texture_coordinates = build_atlas(rig, layers)
     atlas.save(output / "textures" / "atlas.png")
-    (output / "model.moc3").write_bytes(
-        write_moc3(rig_to_moc3(rig, atlas_uv=texture_coordinates))
-    )
+    moc = rig_to_moc3(rig, atlas_uv=texture_coordinates)
+    preserve_canvas_aspect(moc, canvas_width, canvas_height, KEYFORM_POS_UNIT)
+    (output / "model.moc3").write_bytes(write_moc3(moc))
     (output / "model.cdi3.json").write_text(
         json.dumps(cdi3.cdi3(rig), ensure_ascii=False), encoding="utf-8"
     )
@@ -114,7 +166,9 @@ def main() -> int:
             )
             logger.info("绑定完成，耗时 %.2f 秒", perf_counter() - started_at)
             started_at = perf_counter()
-            export_rig(rig, layers, args.output)
+            export_rig(
+                rig, layers, args.output, stack.canvas_width, stack.canvas_height
+            )
             logger.info(
                 "导出完成，耗时 %.2f 秒，目录 %s",
                 perf_counter() - started_at,
