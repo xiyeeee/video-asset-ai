@@ -77,6 +77,8 @@ curl -i http://127.0.0.1:19000/internal/v1/live2d/tasks \
 curl -i http://127.0.0.1:19000/internal/v1/live2d/tasks/live2d-001
 ```
 
+Java 用 `WS /internal/v1/live2d/tasks/events` 接收状态。连接后先收到内存中的现有任务，之后每次状态变化推送一条，报文与 GET 的任务对象相同。GET 仍可用于排查。
+
 - `taskId` 使用 1–128 位 ASCII 字母、数字、下划线或短横线，以字母或数字开头。 `projectId` 接受 JSON 整数或同格式字符串，`modelName` 为 1–255 字符非空白显示名。
 - `sourceImageRef` 相对 `LIVE2D_INPUT_ROOT`，用 `/` 分隔。支持可解码 PNG、JPEG 和 WebP，拒绝 URL、目录穿越及指向共享目录外的符号链接。Java 在提交前写完整图片，并保持源文件可读直至任务终态。
 - POST 首次和同参数重复提交均为 HTTP 202。并发重复提交只排队一次。相同 ID 的字段发生变化返回 HTTP 409 `TASK_CONFLICT`。

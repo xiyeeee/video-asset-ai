@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings, extraction.run, tasks.executor, extraction.detect_people
     )
     live2d_tasks = Live2DTasks(settings)
+    live2d_tasks.bind(asyncio.get_running_loop())
     app.state.live2d_tasks = live2d_tasks
     app.state.character_tasks = tasks
     app.state.asset_tasks = asset_tasks

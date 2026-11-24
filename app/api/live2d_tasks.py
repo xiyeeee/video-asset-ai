@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 
 from app.api.task_errors import task_http_error
 from app.pipeline.character_task_models import TaskId
@@ -32,6 +32,22 @@ def submit_task(
         ) from exc
     except TaskConflict as exc:
         raise task_http_error(409, "TASK_CONFLICT", str(exc)) from exc
+
+
+@router.websocket("/events")
+async def task_events(websocket: WebSocket) -> None:
+    service: Live2DTasks = websocket.app.state.live2d_tasks
+    await websocket.accept()
+    queue, snapshot = service.subscribe()
+    try:
+        for state in snapshot:
+            await websocket.send_json(state)
+        while True:
+            await websocket.send_json(await queue.get())
+    except WebSocketDisconnect:
+        return
+    finally:
+        service.unsubscribe(queue)
 
 
 @router.get("/{task_id}")

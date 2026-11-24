@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from time import perf_counter
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -67,8 +69,24 @@ class Live2DTasks:
         self.input_root = settings.live2d_input_root.resolve()
         self.output_root = settings.live2d_output_root.resolve()
         self.entries: dict[str, Live2DEntry] = {}
+        self.listeners: set[asyncio.Queue[dict[str, Any]]] = set()
+        self.loop: asyncio.AbstractEventLoop | None = None
         self.lock = Lock()
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="live2d")
+
+    def bind(self, loop: asyncio.AbstractEventLoop) -> None:
+        self.loop = loop
+
+    def subscribe(self) -> tuple[asyncio.Queue[dict[str, Any]], list[dict[str, Any]]]:
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        with self.lock:
+            self.listeners.add(queue)
+            snapshot = [self._payload(entry.state) for entry in self.entries.values()]
+        return queue, snapshot
+
+    def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
+        with self.lock:
+            self.listeners.discard(queue)
 
     def submit(self, request: Live2DRequest) -> Live2DState:
         task_id = request.task_id
@@ -86,6 +104,7 @@ class Live2DTasks:
             except RuntimeError:
                 del self.entries[task_id]
                 raise
+        self._emit(state)
         logger.info("taskId=%s Live2D 任务已受理", task_id)
         return state
 
@@ -93,6 +112,20 @@ class Live2DTasks:
         with self.lock:
             entry = self.entries.get(task_id)
             return entry.state if entry else None
+
+    def _emit(self, state: Live2DState) -> None:
+        loop = self.loop
+        if loop is None:
+            return
+        payload = self._payload(state)
+        with self.lock:
+            listeners = tuple(self.listeners)
+        for queue in listeners:
+            loop.call_soon_threadsafe(queue.put_nowait, payload)
+
+    @staticmethod
+    def _payload(state: Live2DState) -> dict[str, Any]:
+        return state.model_dump(mode="json", by_alias=True)
 
     def close(self) -> None:
         self.executor.shutdown()
@@ -108,14 +141,16 @@ class Live2DTasks:
             result: Live2DResult | None = None,
             error: Live2DError | None = None,
         ) -> None:
+            state = Live2DState(
+                task_id=task_id,
+                status=status,
+                stage=stage,
+                result=result,
+                error=error,
+            )
             with self.lock:
-                self.entries[task_id].state = Live2DState(
-                    task_id=task_id,
-                    status=status,
-                    stage=stage,
-                    result=result,
-                    error=error,
-                )
+                self.entries[task_id].state = state
+            self._emit(state)
 
         def report(next_stage: Stage) -> None:
             nonlocal stage

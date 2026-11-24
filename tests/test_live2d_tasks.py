@@ -157,6 +157,19 @@ def test_failed_job_preserves_stage_and_publishes_nothing(
     assert not list((workspace / "output").iterdir())
 
 
+def test_events_socket_pushes_terminal_state(workspace: Path) -> None:
+    with TestClient(app) as client:
+        with client.websocket_connect("/internal/v1/live2d/tasks/events") as socket:
+            created = client.post(ROUTE, json=REQUEST)
+            assert created.status_code == 202
+            state = {"status": "QUEUED"}
+            while state["status"] not in {"SUCCEEDED", "FAILED"}:
+                state = socket.receive_json()
+            assert state["taskId"] == REQUEST["taskId"]
+            assert state["status"] == "FAILED"
+            assert state["error"]["code"]
+
+
 def test_rejects_outside_references_and_missing_images(workspace: Path) -> None:
     (workspace / "outside.png").symlink_to(workspace.parent / "outside.png")
     with TestClient(app) as client:
