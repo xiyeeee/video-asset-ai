@@ -25,3 +25,11 @@ class Settings(BaseSettings):
     dialogue_vad_model: str = "fsmn-vad"
     dialogue_punctuation_model: str = "ct-punc"
     dialogue_speaker_model: str = "cam++"
+    live2d_input_root: Path = Path("samples")
+    live2d_output_root: Path = Path("outputs/live2d-tasks")
+    live2d_converter_argv: list[str] = Field(default_factory=list)
+    live2d_manifest_glob: str = "**/*.model3.json"
+    live2d_core_library: Path | None = None
+    live2d_web_core_js: Path | None = None
+    live2d_node_path: str = "node"
+    live2d_timeout_seconds: int = Field(default=1800, gt=0)

@@ -23,6 +23,9 @@ dialogue = [
     "torch>=2.6,<3",
     "torchaudio>=2.6,<3",
 ]
+live2d = [
+    "pillow<13",
+]
 
 [dependency-groups]
 dev = [
@@ -32,6 +35,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 pythonpath = ["."]
 
 [tool.ruff.lint]

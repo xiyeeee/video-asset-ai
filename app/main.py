@@ -12,10 +12,12 @@ from fastapi.responses import JSONResponse
 from app.api.asset_tasks import router as asset_task_router
 from app.api.character_tasks import router as character_task_router
 from app.api.health import router as health_router
+from app.api.live2d_tasks import router as live2d_task_router
 from app.core.config import Settings
 from app.pipeline.asset_tasks import AssetTasks
 from app.pipeline.character_extraction import CharacterExtraction
 from app.pipeline.character_tasks import CharacterTasks
+from app.pipeline.live2d_tasks import Live2DTasks
 
 logger = logging.getLogger(__name__)
 
@@ -31,13 +33,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     asset_tasks = AssetTasks(
         settings, extraction.run, tasks.executor, extraction.detect_people
     )
+    live2d_tasks = Live2DTasks(settings)
+    app.state.live2d_tasks = live2d_tasks
     app.state.character_tasks = tasks
     app.state.asset_tasks = asset_tasks
     try:
         yield
     finally:
         await asyncio.gather(
-            asyncio.to_thread(tasks.close), asyncio.to_thread(asset_tasks.close)
+            asyncio.to_thread(tasks.close),
+            asyncio.to_thread(asset_tasks.close),
+            asyncio.to_thread(live2d_tasks.close),
         )
 
 
@@ -45,6 +51,7 @@ app = FastAPI(title="video-asset-ai", openapi_url=None, lifespan=lifespan)
 app.include_router(health_router)
 app.include_router(character_task_router)
 app.include_router(asset_task_router)
+app.include_router(live2d_task_router)
 
 
 @app.exception_handler(RequestValidationError)

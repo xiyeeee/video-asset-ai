@@ -124,3 +124,7 @@ uv run ruff check .
 uv run ruff format --check .
 uv run --extra characters pytest
 ```
+
+## 图片转 Live2D
+
+`make dev` 启动后可以提交和轮询 Live2D 任务。转换 CLI、执行环境、真实验证记录及 Java 文件引用约定见 [图片转 Live2D 联调文档](docs/live2d-python.md)。

@@ -11,21 +11,34 @@ class SourceVideoNotFound(FileNotFoundError):
     """源视频引用未指向一个文件。"""
 
 
-def resolve_source_video(root: Path, reference: str) -> Path:
+def resolve_source_file(
+    root: Path, reference: str, *, reference_field: str = "源文件引用"
+) -> Path:
     parts = reference.split("/")
     if any(part in {"", ".", ".."} for part in parts) or any(
         character in reference for character in ("\\", ":", "\0")
     ):
-        raise InvalidSourceReference("sourceVideoRef 须为共享输入目录内的相对文件引用")
+        raise InvalidSourceReference(
+            f"{reference_field} 须为共享输入目录内的相对文件引用"
+        )
     try:
         source = (root / reference).resolve()
     except (OSError, RuntimeError) as exc:
-        raise InvalidSourceReference("sourceVideoRef 无法解析") from exc
+        raise InvalidSourceReference(f"{reference_field} 无法解析") from exc
     if not source.is_relative_to(root):
-        raise InvalidSourceReference("sourceVideoRef 须为共享输入目录内的相对文件引用")
+        raise InvalidSourceReference(
+            f"{reference_field} 须为共享输入目录内的相对文件引用"
+        )
     if not source.is_file():
-        raise SourceVideoNotFound("共享输入目录中找不到源视频")
+        raise FileNotFoundError("共享输入目录中找不到源文件")
     return source
+
+
+def resolve_source_video(root: Path, reference: str) -> Path:
+    try:
+        return resolve_source_file(root, reference, reference_field="sourceVideoRef")
+    except FileNotFoundError as exc:
+        raise SourceVideoNotFound("共享输入目录中找不到源视频") from exc
 
 
 def checked_file(root: Path, base: Path, reference: str) -> Path:
@@ -41,11 +54,13 @@ def checked_file(root: Path, base: Path, reference: str) -> Path:
     return resolved
 
 
-def stage_task_directory(root: Path) -> TemporaryDirectory[str]:
+def stage_task_directory(
+    root: Path, *, prefix: str = ".character-task-"
+) -> TemporaryDirectory[str]:
     root.mkdir(parents=True, exist_ok=True)
     if root.resolve() != root:
         raise ValueError("共享输出根目录在运行期间发生变化")
-    return TemporaryDirectory(prefix=".character-task-", dir=root)
+    return TemporaryDirectory(prefix=prefix, dir=root)
 
 
 def publish_task_directory(root: Path, staged: Path, destination: Path) -> None:
