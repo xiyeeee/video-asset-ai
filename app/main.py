@@ -12,11 +12,14 @@ from fastapi.responses import JSONResponse
 from app.api.asset_tasks import router as asset_task_router
 from app.api.character_tasks import router as character_task_router
 from app.api.health import router as health_router
+from app.api.live2d_combo import router as live2d_combo_router
+from app.api.live2d_motion import router as live2d_motion_router
 from app.api.live2d_tasks import router as live2d_task_router
 from app.core.config import Settings
 from app.pipeline.asset_tasks import AssetTasks
 from app.pipeline.character_extraction import CharacterExtraction
 from app.pipeline.character_tasks import CharacterTasks
+from app.pipeline.live2d_motion_tasks import Live2DMotionTasks
 from app.pipeline.live2d_tasks import Live2DTasks
 
 logger = logging.getLogger(__name__)
@@ -36,6 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     live2d_tasks = Live2DTasks(settings)
     live2d_tasks.bind(asyncio.get_running_loop())
     app.state.live2d_tasks = live2d_tasks
+    app.state.live2d_motion_tasks = Live2DMotionTasks(settings, live2d_tasks.executor)
     app.state.character_tasks = tasks
     app.state.asset_tasks = asset_tasks
     try:
@@ -53,6 +57,8 @@ app.include_router(health_router)
 app.include_router(character_task_router)
 app.include_router(asset_task_router)
 app.include_router(live2d_task_router)
+app.include_router(live2d_motion_router)
+app.include_router(live2d_combo_router)
 
 
 @app.exception_handler(RequestValidationError)
@@ -89,9 +95,12 @@ async def log_request(
         return response
     finally:
         logger.info(
-            "requestId=%s taskId=%s method=%s route=%s status=%d 耗时 %.1f 毫秒",
+            "requestId=%s taskId=%s projectId=%s modelVersionId=%s comboRequestId=%s method=%s route=%s status=%d 耗时 %.1f 毫秒",
             request_id,
             getattr(request.state, "task_id", None),
+            getattr(request.state, "project_id", None),
+            getattr(request.state, "model_version_id", None),
+            getattr(request.state, "combo_request_id", None),
             request.method,
             getattr(request.scope.get("route"), "path", "<unmatched>"),
             status,

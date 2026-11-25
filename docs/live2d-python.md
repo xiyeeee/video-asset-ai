@@ -1,5 +1,7 @@
 # 图片转 Live2D · Python 与 Java 联调
 
+组合动作的 Python 编译端点与 Java/前端共享契约见 [Live2D 组合动作 API](../../video-asset-server/docs/live2d-combo-motion-api.md)。
+
 ## 启动与配置
 
 从 `video-asset-ai` 根目录启动。日常联调继续用 `make dev`，端口为 19000。使用本机拆层时也可运行下面的命令。Pillow 与人物提取共用已锁定版本，第三方转换器使用独立环境。
