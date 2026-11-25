@@ -1,5 +1,7 @@
 # 图片转 Live2D · Python 与 Java 联调
 
+模型能力与模板解析见 [Live2D 模型能力和动作模板 API](live2d-model-capabilities-api.md)。
+
 组合动作的 Python 编译端点与 Java/前端共享契约见 [Live2D 组合动作 API](../../video-asset-server/docs/live2d-combo-motion-api.md)。
 
 ## 启动与配置

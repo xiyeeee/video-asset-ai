@@ -24,7 +24,7 @@ ACTION_PARAMETERS = {
 }
 
 
-def read_capabilities(model: ModelRef, settings: Settings) -> Capabilities:
+def read_model_entry(model: ModelRef, settings: Settings) -> tuple[Path, Path, dict]:
     root = settings.live2d_output_root.resolve()
     manifest = resolve_source_file(
         root, model.model_manifest_ref, reference_field="modelManifestRef"
@@ -45,6 +45,10 @@ def read_capabilities(model: ModelRef, settings: Settings) -> Capabilities:
     except (KeyError, TypeError, ValueError, OSError, RuntimeError) as exc:
         raise MotionError("MODEL_INVALID", "模型入口或 MOC3 引用无效") from exc
 
+    return manifest, moc, content
+
+
+def read_runtime_parameters(moc: Path, settings: Settings) -> ModelParameters:
     core = settings.live2d_web_core_js
     if core is None or not core.is_file():
         raise MotionError("CUBISM_CORE_UNAVAILABLE", "动作编译需要配置 Cubism Web Core")
@@ -72,6 +76,12 @@ def read_capabilities(model: ModelRef, settings: Settings) -> Capabilities:
     except (subprocess.CalledProcessError, IndexError, ValueError, OSError) as exc:
         raise MotionError("MODEL_INSPECTION_FAILED", "无法读取模型绑定参数") from exc
 
+    return parameters
+
+
+def read_capabilities(model: ModelRef, settings: Settings) -> Capabilities:
+    _, moc, _ = read_model_entry(model, settings)
+    parameters = read_runtime_parameters(moc, settings)
     if model.model_moc_sha256 and parameters.moc_sha256 != model.model_moc_sha256:
         raise MotionError("MODEL_VERSION_MISMATCH", "模型文件与指定版本的摘要不一致")
     all_active = {

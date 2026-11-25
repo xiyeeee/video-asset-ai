@@ -2,6 +2,8 @@
 
 浏览器路由、持久化结构和前端恢复流程以 [共享组合动作 API 契约](../../video-asset-server/docs/live2d-combo-motion-api.md) 为准；本文补充 Python 内部编译器协议和运行条件。
 
+动作资产的版本、模型能力映射和兼容性接口见 [Live2D 动作资产 API](../../video-asset-server/docs/live2d-motion-assets-api.md)。
+
 ## 启动和文件引用
 
 `make dev` 启动 Python 服务，默认 19000。配置 `LIVE2D_WEB_CORE_JS`、`LIVE2D_NODE_PATH`、`FFMPEG_PATH`、`LIVE2D_INPUT_ROOT` 和 `LIVE2D_OUTPUT_ROOT`。Java 校验项目权限、固定模型及素材版本，再把对象存储中的文件放到共享目录。模型沿用已生成的共享文件时可以直接引用，保留模型入口与 MOC3 的相对位置。

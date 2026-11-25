@@ -1,11 +1,19 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from app.api.task_errors import task_http_error
+from app.live2d.analysis_models import (
+    AnalysisRequest,
+    AnalysisResult,
+    TemplateRequest,
+    TemplateResult,
+)
+from app.live2d.model_analysis import analyze_model
 from app.live2d.motion_capabilities import read_capabilities
 from app.live2d.motion_models import Capabilities, ModelRef, MotionError, MotionRequest
+from app.live2d.resolve_template import resolve_template
 from app.pipeline.character_task_models import TaskId
 from app.pipeline.character_tasks import TaskConflict
 from app.pipeline.live2d_motion_tasks import Live2DMotionTasks, MotionState
@@ -47,6 +55,40 @@ def capabilities(
             "MODEL_INSPECTION_TIMEOUT": 504,
         }
         raise task_http_error(statuses.get(exc.code, 422), exc.code, str(exc)) from exc
+
+
+def analysis_error(
+    exc: MotionError | InvalidSourceReference | FileNotFoundError,
+) -> HTTPException:
+    if isinstance(exc, MotionError):
+        return task_http_error(
+            409 if exc.code == "MODEL_VERSION_MISMATCH" else 422, exc.code, str(exc)
+        )
+    if isinstance(exc, InvalidSourceReference):
+        return task_http_error(422, "MODEL_REFERENCE_INVALID", "模型入口引用无效")
+    return task_http_error(404, "MODEL_NOT_FOUND", "找不到模型版本入口")
+
+
+@router.post("/model-capabilities/analyze")
+def analyze_capabilities(
+    payload: AnalysisRequest, request: Request, service: MotionService
+) -> AnalysisResult:
+    request.state.model_version_id = payload.model_version_id
+    try:
+        return analyze_model(payload, service.settings)
+    except (MotionError, InvalidSourceReference, FileNotFoundError) as exc:
+        raise analysis_error(exc) from exc
+
+
+@router.post("/motion-templates/resolve")
+def resolve_motion_template(
+    payload: TemplateRequest, request: Request, service: MotionService
+) -> TemplateResult:
+    request.state.model_version_id = payload.model_version_id
+    try:
+        return resolve_template(payload, service.settings)
+    except (MotionError, InvalidSourceReference, FileNotFoundError) as exc:
+        raise analysis_error(exc) from exc
 
 
 @router.post("/motion-tasks", status_code=202)

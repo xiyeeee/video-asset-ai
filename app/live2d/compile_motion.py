@@ -44,9 +44,20 @@ class MotionFile(TypedDict):
     Curves: list[Curve]
 
 
+def parameter_value(
+    minimum: float, default: float, maximum: float, normalized: float
+) -> float:
+    target = minimum if normalized < 0 else maximum
+    return default + (target - default) * abs(normalized)
+
+
 def _value(parameter: Parameter, weight: float, *, decreasing: bool = False) -> float:
-    target = parameter.min if decreasing else parameter.max
-    return parameter.default_value + (target - parameter.default_value) * weight
+    return parameter_value(
+        parameter.min,
+        parameter.default_value,
+        parameter.max,
+        -weight if decreasing else weight,
+    )
 
 
 def _shape(
