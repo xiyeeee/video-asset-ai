@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 from app.characters.extract import Detection
 from app.core.config import Settings
+from app.live2d.mouth_layers import clean_mouth_from_face, paint_open_mouth
 
 if TYPE_CHECKING:
     from PIL.Image import Image
@@ -159,7 +160,16 @@ def split_image(source: Path, output: Path, models: GroundedSam2) -> None:
         if mask.getbbox():
             layer = original.copy()
             layer.putalpha(mask)
+            if (
+                name == "10_face_base"
+                and (mouth_mask := layers.get("35_mouth")) is not None
+            ):
+                layer = clean_mouth_from_face(layer, mouth_mask)
             layer.save(output / f"{name}.png")
+            if name == "35_mouth":
+                opened = paint_open_mouth(layer, face_mask)
+                if opened is not None:
+                    opened.save(output / "34_mouth_cavity.png")
     logger.info("基础分层导出 %d 个可见部件", sum(1 for _ in output.glob("*.png")))
 
 

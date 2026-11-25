@@ -64,6 +64,38 @@ def preserve_canvas_aspect(
                 ]
 
 
+def blend_mouth_layers(rig: Rig) -> None:
+    lips = rig.mesh_for("35_mouth")
+    cavity = rig.mesh_for("34_mouth_cavity")
+    if lips is None or cavity is None:
+        return
+    parameters = {parameter.id: parameter for parameter in rig.parameters}
+    opening = parameters.get("ParamMouthOpenY")
+    if opening is not None and opening.max > opening.min:
+        # 用开合参数在原嘴唇和张嘴层之间过渡，避免闭嘴纹理盖住牙齿。
+        for keyform in opening.keyforms:
+            weight = (keyform.value - opening.min) / (opening.max - opening.min)
+            keyform.opacity_overrides.update(
+                {"35_mouth": 1 - weight, "34_mouth_cavity": weight}
+            )
+
+    form = parameters.get("ParamMouthForm")
+    if form is not None:
+        # 张嘴层沿用同一横向位置的嘴角变形，让微笑和开合可以同时生效。
+        nearest_lip_vertices = [
+            min(
+                range(len(lips.vertices)),
+                key=lambda index: abs(lips.vertices[index][0] - x),
+            )
+            for x, _ in cavity.vertices
+        ]
+        for keyform in form.keyforms:
+            if (lip_offsets := keyform.mesh_offsets.get("35_mouth")) is not None:
+                keyform.mesh_offsets["34_mouth_cavity"] = [
+                    lip_offsets[index] for index in nearest_lip_vertices
+                ]
+
+
 def export_rig(
     rig: Rig, layers: Path, output: Path, canvas_width: int, canvas_height: int
 ) -> None:
@@ -164,6 +196,7 @@ def main() -> int:
             rig = rig_from_stack(
                 stack, name=os.environ.get("LIVE2D_MODEL_NAME") or "model"
             )
+            blend_mouth_layers(rig)
             logger.info("绑定完成，耗时 %.2f 秒", perf_counter() - started_at)
             started_at = perf_counter()
             export_rig(
